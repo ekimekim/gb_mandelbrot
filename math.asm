@@ -88,7 +88,7 @@ SECTION "Math Methods", ROM0
 ;  H: Vector number of output (may also be first input)
 ;  D: Vector number of input (or second input)
 ;  B: Preserved.
-;  C: How many bytes of precision to calculate - 1 (ie. 0 = 1 byte). Preserved.
+;  C: How many bytes of precision to calculate - 1 (ie. 1 = 2 bytes). Min 1. Preserved.
 ;  All non-preserved are clobbered.
 ;  Carry is set on overflow (absolute result >= 4), cleared otherwise.
 
@@ -201,6 +201,9 @@ MathCopy:
 	ld [HL-], A
 	dec E
 	jr nz, .loop
+	; final loop
+	ld A, [DE]
+	ld [HL], A
 	; the only thing we've done that affects carry is SignAddrToVecHigh, which will always clear it
 	ret
 
@@ -215,7 +218,9 @@ MathDouble:
 	rla [HL]
 	dec L ; note doesn't affect carry
 	jr nz, .loop
-	# final carry is output
+	; final loop
+	rla [HL]
+	; final carry is output
 	ret
 
 
@@ -281,6 +286,10 @@ VecAdd:
 	ld [HL-], A
 	dec E
 	jr nz, .loop
+	; final loop
+	ld A, [DE]
+	adc [HL]
+	ld [HL], A
 	ret
 
 
@@ -299,6 +308,10 @@ VecSub:
 	ld [HL-], A
 	dec E
 	jr nz, .loop
+	; final loop
+	ld A, [DE]
+	sbc [HL]
+	ld [HL], A
 	ret
 
 
@@ -311,11 +324,17 @@ VecNegate:
 	; We do this in a single pass.
 	ld L, C
 	scf ; set carry flag. it should generally be already set anyway, but nasty bug if it isn't.
+	ld E, 0 ; minor speedup by caching 0 into E so we can adc E instead of adc 0
 .loop
 	ld A, [HL]
 	cpl ; A = ~A. doesn't affect carry.
-	adc 0 ; apply carry. this will always be there for first byte, afterwards it's carried from prev loop
+	adc E ; apply carry by adding 0. this will always be there for first byte, afterwards it's carried from prev loop
 	ld [HL], A ; we could ld [HL-], A here, but then we don't have our loop condition check
 	dec L
 	jr nz, .loop
+	; final loop
+	ld A, [HL]
+	cpl
+	adc E
+	ld [HL], A
 	ret
