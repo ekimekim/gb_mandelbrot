@@ -1,7 +1,6 @@
 
-import math
 from decimal import Decimal
-from fraction import Fraction
+from fractions import Fraction
 
 
 file = 'math'
@@ -28,7 +27,7 @@ for precision in [2, 3, 8, 255, 256]:
 			bytes.append(value % 256)
 			value /= 256
 		assert value == 0, "value out of range"
-		return sign, bytes[::-1]
+		return bytes[::-1], sign
 
 	def random_value():
 		"""Gets a uniform random value from -2 to 2"""
@@ -64,7 +63,7 @@ for precision in [2, 3, 8, 255, 256]:
 		out_cflag=0,
 	)
 
-	value = 2 + math.abs(random_value()) # 2 to 4
+	value = 2 + abs(random_value()) # 2 to 4
 	double_carry = Test('MathDouble',
 		in_H=Vecs.X,
 		in_VectorsBase=vecmem(X=value),

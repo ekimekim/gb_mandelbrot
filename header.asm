@@ -30,13 +30,13 @@ Restart7::
 section "VBlank Interrupt handler", ROM0 [$40]
 ; triggered upon VBLANK period starting
 IntVBlank::
-	jp VBlankHandler
+	reti
 
 section "LCDC Interrupt handler", ROM0 [$48]
 ; Also known as STAT handler
 ; LCD controller changed state
 IntLCDC::
-	jp StatHandler
+	reti
 
 section "Timer Interrupt handler", ROM0 [$50]
 ; A configurable amount of time has passed

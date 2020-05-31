@@ -159,14 +159,14 @@ ENDM
 
 ; Convert vector number in \1 into vector address high byte
 NumToVecHigh: MACRO
-	ld A, HIGH(VectorBase)
+	ld A, HIGH(VectorsBase)
 	add \1
 	ld \1, A
 ENDM
 
 ; Convert sign byte address \1 \2 into vector address high byte, put into \1
 SignAddrToVecHigh: MACRO
-	ld A, HIGH(VectorBase)
+	ld A, HIGH(VectorsBase)
 	add \2
 	ld \1, A
 	xor A
@@ -176,7 +176,7 @@ ENDM
 ; Convert vector address high byte \1 into sign byte address \1 \2
 VecHighToSignAddr: MACRO
 	ld A, \1
-	sub HIGH(VectorBase) ; left with just the vec number
+	sub HIGH(VectorsBase) ; left with just the vec number
 	ld \2, A
 	ld \1, HIGH(SignBytes)
 ENDM
@@ -337,4 +337,12 @@ VecNegate:
 	cpl
 	adc E
 	ld [HL], A
+	ret
+
+
+; TODO stubs
+MathSquare:
+MathMultiply:
+MathAddNoOut:
+MathSub:
 	ret

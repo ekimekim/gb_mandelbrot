@@ -308,7 +308,7 @@ def process_file(top_level_dir, include_dir, tests_dir, extra_link_dirs, objs_di
 		cmd(['rgbfix', '-v', '-p', '0x40', rom_path])
 
 
-def main(top_level_dir, include_dir='include/', tests_dir='tests', extra_link_dirs='tasks', objs_dir='build/debug'):
+def main(top_level_dir, include_dir='include/', tests_dir='tests', extra_link_dirs='', objs_dir='build/debug'):
 	include_dir = os.path.join(top_level_dir, include_dir)
 	tests_dir = os.path.join(top_level_dir, tests_dir)
 	extra_link_dirs = (
