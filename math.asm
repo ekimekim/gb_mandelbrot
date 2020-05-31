@@ -112,22 +112,22 @@ ENDM
 ; for each iteration, so on return B=0 always means "hit max iterations".
 GetIterations:
 	; special case first iteration, where z = 0 so iteration is z = 0^2 + c = c
-	MathCall MathCopy X CX
-	MathCall MathCopy Y CY
+	MathCall MathCopy, X, CX
+	MathCall MathCopy, Y, CY
 	dec B
 	; main loop. note we break on any overflow (see above)
 .loop
 	; ysq = (prev y)^2
-	MathCall MathSquare YSq Y
+	MathCall MathSquare, YSq, Y
 	ret c
 	; y = prev y * prev x, we do this early so we can re-use X
-	MathCall MathMultiply Y X
+	MathCall MathMultiply, Y, X
 	ret c
 	; x = (prev x)^2
-	MathCall MathSquare X X
+	MathCall MathSquare, X, X
 	ret c
 	; Add prev x^2 and prev y^2, checking for overflow but discard result
-	MathCall MathAddNoOut X YSq
+	MathCall MathAddNoOut, X, YSq
 	ret c
 	; We're now past the part where we're checking if previous iteration escaped,
 	; and into checking next iteration. So decrement the iteration count and return
@@ -135,16 +135,16 @@ GetIterations:
 	dec B
 	ret z
 	; y = 2 * prev y * prev x
-	MathSingleCall MathDouble Y
+	MathSingleCall MathDouble, Y
 	ret c
 	; y = 2 * prev y * prev x + cy = next y
-	MathCall MathAdd Y CY
+	MathCall MathAdd, Y, CY
 	ret c
 	; x = (prev x)^2 - (prev y)^2
-	MathCall MathSub X YSq
+	MathCall MathSub, X, YSq
 	ret c
 	; x = (prev x)^2 - (prev y)^2 + cx = next x
-	MathCall MathAdd X CX
+	MathCall MathAdd, X, CX
 	jr nc, .loop
 	ret
 
@@ -185,14 +185,14 @@ ENDM
 ; Copy input to output
 MathCopy:
 	; get sign addresses
-	NumToSignAddr H L
-	NumToSignAddr D E
+	NumToSignAddr H, L
+	NumToSignAddr D, E
 	; copy sign
 	ld A, [DE]
 	ld [HL], A
 	; get vec addresses
-	SignAddrToVecHigh H L
-	SignAddrToVecHigh D E
+	SignAddrToVecHigh H, L
+	SignAddrToVecHigh D, E
 	; copy vec, starting from C
 	ld L, C
 	ld E, C
@@ -215,11 +215,11 @@ MathDouble:
 	ld L, C
 .loop
 	; shift left once, putting carry in LSB and putting MSB in carry
-	rla [HL]
+	rl [HL]
 	dec L ; note doesn't affect carry
 	jr nz, .loop
 	; final loop
-	rla [HL]
+	rl [HL]
 	; final carry is output
 	ret
 
@@ -233,8 +233,8 @@ MathAdd:
 	;  -/+: vec = other vec - vec, on carry negate vec and output -, otherwise output +, output no carry
 
 	; get sign addresses
-	NumToSignAddr H L
-	NumToSignAddr D E
+	NumToSignAddr H, L
+	NumToSignAddr D, E
 
 	ld A, [DE]
 	xor [HL] ; set z if both + or both -
@@ -243,8 +243,8 @@ MathAdd:
 	; This is the easy case. The sign of the output won't change, so that's done.
 	; All that's left is to add the unsigned vectors, and pass the carry result back unchanged.
 	; In fact, we can tail call.
-	SignAddrToVecHigh H L
-	SignAddrToVecHigh D E
+	SignAddrToVecHigh H, L
+	SignAddrToVecHigh D, E
 	jr VecAdd
 	; tail call
 
@@ -252,14 +252,14 @@ MathAdd:
 
 	; Keeping in mind we can't modify our input, only our output, first step
 	; is to subtract the vectors so we have (output - input). This may underflow.
-	SignAddrToVecHigh H L
-	SignAddrToVecHigh D E
+	SignAddrToVecHigh H, L
+	SignAddrToVecHigh D, E
 	call VecSub
 
 	jr c, .underflow
 
 	; No underflow, this means we need to flip the output sign (the other vec was dominant)
-	VecHighToSignAddr H L
+	VecHighToSignAddr H, L
 	ld A, 1
 	sub [HL]
 	ld [HL], A
