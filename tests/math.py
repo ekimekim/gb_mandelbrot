@@ -16,6 +16,8 @@ for precision in [2, 3, 8, 255, 256]:
 		Value may be string, in which case it's interpreted using Decimal()."""
 		if isinstance(value, str):
 			value = Decimal(value)
+		if value < -4 or value > 4:
+			raise ValueError("value out of range")
 		if value >= 0:
 			sign = 0
 		else:
@@ -49,8 +51,9 @@ for precision in [2, 3, 8, 255, 256]:
 
 	value = random_value()
 	copy = Test('MathCopy',
-		in_H=Vecs.X,
-		in_D=Vecs.Y,
+		in_D=Vecs.X,
+		in_H=Vecs.Y,
+		in_C=precision - 1,
 		in_VectorsBase=vecmem(X=value),
 		out_VectorsBase=vecmem(Y=value),
 	)
@@ -58,6 +61,7 @@ for precision in [2, 3, 8, 255, 256]:
 	value = random_value()
 	double = Test('MathDouble',
 		in_H=Vecs.X,
+		in_C=precision - 1,
 		in_VectorsBase=vecmem(X=value),
 		out_VectorsBase=vecmem(X=2*value),
 		out_cflag=0,
@@ -66,6 +70,7 @@ for precision in [2, 3, 8, 255, 256]:
 	value = 2 + abs(random_value()) # 2 to 4
 	double_carry = Test('MathDouble',
 		in_H=Vecs.X,
+		in_C=precision - 1,
 		in_VectorsBase=vecmem(X=value),
 		out_VectorsBase=vecmem(X=(2*value) % 4),
 		out_cflag=1,
