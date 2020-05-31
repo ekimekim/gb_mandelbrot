@@ -157,6 +157,13 @@ NumToSignAddr: MACRO
 	ld \1, HIGH(SignBytes)
 ENDM
 
+; Convert vector number in \1 into vector address high byte
+NumToVecHigh: MACRO
+	ld A, HIGH(VectorBase)
+	add \1
+	ld \1, A
+ENDM
+
 ; Convert sign byte address \1 \2 into vector address high byte, put into \1
 SignAddrToVecHigh: MACRO
 	ld A, HIGH(VectorBase)
@@ -164,6 +171,14 @@ SignAddrToVecHigh: MACRO
 	ld \1, A
 	xor A
 	ld \2, A
+ENDM
+
+; Convert vector address high byte \1 into sign byte address \1 \2
+VecHighToSignAddr: MACRO
+	ld A, \1
+	sub HIGH(VectorBase) ; left with just the vec number
+	ld \2, A
+	ld \1, HIGH(SignBytes)
 ENDM
 
 
@@ -187,4 +202,120 @@ MathCopy:
 	dec E
 	jr nz, .loop
 	; the only thing we've done that affects carry is SignAddrToVecHigh, which will always clear it
+	ret
+
+
+; Double output (left shift by 1). Note only takes one arg (DE is ignored).
+MathDouble:
+	; note NumToVecHigh will clear carry for us
+	NumToVecHigh H
+	ld L, C
+.loop
+	; shift left once, putting carry in LSB and putting MSB in carry
+	rla [HL]
+	dec L ; note doesn't affect carry
+	jr nz, .loop
+	# final carry is output
+	ret
+
+
+; Add input to output in place
+MathAdd:
+	; 4 cases:
+	;  +/+: Add vecs, output +, on carry output carry
+	;  -/-: Add vecs, output -, on carry output carry
+	;  +/-: vec = other vec - vec, on carry negate vec and output +, otherwise output -, output no carry
+	;  -/+: vec = other vec - vec, on carry negate vec and output -, otherwise output +, output no carry
+
+	; get sign addresses
+	NumToSignAddr H L
+	NumToSignAddr D E
+
+	ld A, [DE]
+	xor [HL] ; set z if both + or both -
+	jr nz, .different_signs
+
+	; This is the easy case. The sign of the output won't change, so that's done.
+	; All that's left is to add the unsigned vectors, and pass the carry result back unchanged.
+	; In fact, we can tail call.
+	SignAddrToVecHigh H L
+	SignAddrToVecHigh D E
+	jr VecAdd
+	; tail call
+
+.different_signs
+
+	; Keeping in mind we can't modify our input, only our output, first step
+	; is to subtract the vectors so we have (output - input). This may underflow.
+	SignAddrToVecHigh H L
+	SignAddrToVecHigh D E
+	call VecSub
+
+	jr c, .underflow
+
+	; No underflow, this means we need to flip the output sign (the other vec was dominant)
+	VecHighToSignAddr H L
+	ld A, 1
+	sub [HL]
+	ld [HL], A
+	; Note carry flag is still clear from VecHighToSignAddr above
+	ret
+
+.underflow
+	; Negate the vector so it's positive again, and leave output sign unchanged (our vec was dominant)
+	call VecNegate
+	; Make sure carry flag is clear
+	xor A
+	ret
+
+
+; Internal helper. Obeys same calling conventions as Math functions, except HL and DE
+; should be vector addresses. Adds DE vector to HL vector in place (does NOT look at sign).
+; Must be called with clear carry flag. Returns carry as expected.
+VecAdd:
+	ld L, C
+	ld E, C
+.loop
+	ld A, [DE]
+	adc [HL]
+	ld [HL-], A
+	dec E
+	jr nz, .loop
+	ret
+
+
+; Internal helper. Obeys same calling conventions as Math functions, except HL and DE
+; should be vector addresses. Subtracts HL vector from DE vector, writing to HL in place
+; (does NOT look at sign).
+; To reiterate: THIS IS OUTPUT = INPUT - OUTPUT, NOT OUTPUT -= INPUT.
+; Note that this can underflow if DE < HL. In this case carry will be set.
+; Must be called with clear carry flag.
+VecSub:
+	ld L, C
+	ld E, C
+.loop
+	ld A, [DE]
+	sbc [HL]
+	ld [HL-], A
+	dec E
+	jr nz, .loop
+	ret
+
+
+; Internal helper. Obeys same calling conventions as Math functions, except HL should
+; be a vector address. Flips an underflowed vector HL back to the positive 2s-complement value.
+VecNegate:
+	; For each digit, we need to invert the bits.
+	; In addition, we need to add 1 to the overall number.
+	; This may mean carrying a carry bit all the way up!
+	; We do this in a single pass.
+	ld L, C
+	scf ; set carry flag. it should generally be already set anyway, but nasty bug if it isn't.
+.loop
+	ld A, [HL]
+	cpl ; A = ~A. doesn't affect carry.
+	adc 0 ; apply carry. this will always be there for first byte, afterwards it's carried from prev loop
+	ld [HL], A ; we could ld [HL-], A here, but then we don't have our loop condition check
+	dec L
+	jr nz, .loop
 	ret
