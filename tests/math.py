@@ -17,7 +17,7 @@ for precision in [2, 3, 8, 255, 256]:
 		if isinstance(value, str):
 			value = Decimal(value)
 		if value < -4 or value > 4:
-			raise ValueError("value out of range")
+			raise ValueError("value out of range: {}".format(value))
 		if value >= 0:
 			sign = 0
 		else:
@@ -28,12 +28,18 @@ for precision in [2, 3, 8, 255, 256]:
 		for _ in range(precision):
 			bytes.append(value % 256)
 			value /= 256
-		assert value == 0, "value out of range"
+		assert value == 0, "value out of range, got remainder {}".format(value)
 		return bytes[::-1], sign
 
+	def uniform(exp=0):
+		"""Gets a uniform random value in [0, 2^exp) which does not exceed current precision"""
+		return Fraction(random.randrange(2 ** (8 * precision - 2 + exp))) / 2 ** (8 * precision - 2)
+
 	def random_value():
-		"""Gets a uniform random value from -2 to 2"""
-		return 4 * Fraction(random.randrange(2 ** (8 * precision))) / 2 ** (8 * precision) - 2
+		"""Gets a uniform random value from -2 to 2 (both exclusive)"""
+		sign = random.choice([-1, 1])
+		value = uniform(exp=1)
+		return sign * value
 
 	def vecmem(BaseX=None, BaseY=None, CX=None, CY=None, X=None, Y=None, YSq=None):
 		"""Defines what VectorsBase + SignBytes memory range should look like based on values"""
@@ -71,11 +77,11 @@ for precision in [2, 3, 8, 255, 256]:
 	value = random_value()
 	double = Test('MathDouble', **test_regs(in1=value, out=2*value, carry=0))
 
-	value = 2 + abs(random_value()) # 2 to 4
+	value = 2 + uniform(exp=1) # 2 to 4
 	double_carry = Test('MathDouble', **test_regs(in1=value, out=(2*value) % 4, carry=1))
 
-	value1 = abs(random_value()) / 2 # 0 to 1
-	value2 = 1 + abs(random_value()) / 2 # 1 to 2
+	value1 = uniform() # 0 to 1
+	value2 = 1 + uniform() # 1 to 2
 	add_pos_pos = Test('MathAdd', **test_regs(in1=value1, in2=value2, out=value1+value2, carry=0))
 	add_sub_sub = Test('MathAdd', **test_regs(in1=-value1, in2=-value2, out=-(value1+value2), carry=0))
 	add_pos_sub_no_underflow = Test('MathAdd', **test_regs(in1=-value1, in2=value2, out=value2-value1, carry=0))
