@@ -74,6 +74,14 @@ for precision in [2, 3, 8, 255, 256]:
 	value = 2 + abs(random_value()) # 2 to 4
 	double_carry = Test('MathDouble', **test_regs(in1=value, out=(2*value) % 4, carry=1))
 
+	value1 = abs(random_value()) / 2 # 0 to 1
+	value2 = 1 + abs(random_value()) / 2 # 1 to 2
+	add_pos_pos = Test('MathAdd', **test_regs(in1=value1, in2=value2, out=value1+value2, carry=0))
+	add_sub_sub = Test('MathAdd', **test_regs(in1=-value1, in2=-value2, out=-(value1+value2), carry=0))
+	add_pos_sub_no_underflow = Test('MathAdd', **test_regs(in1=-value1, in2=value2, out=value2-value1, carry=0))
+	add_pos_sub_underflow = Test('MathAdd', **test_regs(in1=value1, in2=-value2, out=value1-value2, carry=0))
+	add_carry = Test('MathAdd', **test_regs(in1=3 + value1, in2=value2, out=(3+value1+value2) % 4, carry=1))
+	sub_pos_pos = Test('MathSub', **test_regs(in1=value1, in2=value2, out=value1-value2, carry=0))
 
 	# find all new tests, rename them to include precision
 	for name, value in globals().items():
