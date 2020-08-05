@@ -49,32 +49,31 @@ for precision in [2, 3, 8, 255, 256]:
 			signs.append(sign)
 		return Memory(vecs + signs)
 
-	value = random_value()
-	copy = Test('MathCopy',
-		in_D=Vecs.X,
-		in_H=Vecs.Y,
-		in_C=precision - 1,
-		in_VectorsBase=vecmem(X=value),
-		out_VectorsBase=vecmem(Y=value),
-	)
+	def test_regs(in1=None, in2=None, out=None, carry=None):
+		kwargs = {'in_C': precision - 1, 'in_H': Vecs.X}
+		in_vecs = {}
+		if in1 is not None:
+			in_vecs['X'] = in1
+		if in2 is not None:
+			kwargs['in_D'] = Vecs.Y
+			in_vecs['Y'] = in2
+		if in_vecs:
+			kwargs['in_VectorsBase'] = vecmem(**in_vecs)
+		if out is not None:
+			kwargs['out_VectorsBase'] = vecmem(X=out)
+		if carry is not None:
+			kwargs['out_cflag'] = carry
+		return kwargs
 
 	value = random_value()
-	double = Test('MathDouble',
-		in_H=Vecs.X,
-		in_C=precision - 1,
-		in_VectorsBase=vecmem(X=value),
-		out_VectorsBase=vecmem(X=2*value),
-		out_cflag=0,
-	)
+	copy = Test('MathCopy', **test_regs(in2=value, out=value))
+
+	value = random_value()
+	double = Test('MathDouble', **test_regs(in1=value, out=2*value, carry=0))
 
 	value = 2 + abs(random_value()) # 2 to 4
-	double_carry = Test('MathDouble',
-		in_H=Vecs.X,
-		in_C=precision - 1,
-		in_VectorsBase=vecmem(X=value),
-		out_VectorsBase=vecmem(X=(2*value) % 4),
-		out_cflag=1,
-	)
+	double_carry = Test('MathDouble', **test_regs(in1=value, out=(2*value) % 4, carry=1))
+
 
 	# find all new tests, rename them to include precision
 	for name, value in globals().items():
