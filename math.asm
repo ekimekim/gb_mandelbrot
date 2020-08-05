@@ -19,7 +19,7 @@
 ;  ysq = square(y)   break (because |y| > 2)
 ;  y *= x            break (because |xy| <= max(x,y)^2, so |xy| > 4 implies x^2 > 4 or y^2 > 4)
 ;  x = square(x)     break (because |x| > 2)
-;  add(x, ysq)       break (because |z| > 2)
+;  add(x, ysq)       break (because |z| > 2) (we're only doing this to check for |z|, can we omit it and just break when |x| > 2 or |y| > 2?)
 ;  inc count
 ;  y *= 2            break (because |imag_c| < 2, so |this value| > 4 implies |new y| > 2)
 ;  y += imag_c       break (because new y > 4)
@@ -224,6 +224,18 @@ MathDouble:
 	ret
 
 
+; output = output - input
+; This is equivalent to output + (-input).
+; We get the sign bits just like the start of MathAdd, but flip the input sign.
+; Then we just proceed in MathAdd as normal.
+MathSub:
+	NumToSignAddr H, L
+	NumToSignAddr D, E
+	ld A, [DE]
+	xor 1 ; 0 -> 1, 1 -> 0
+	jr MathAddSubCommon
+
+
 ; Add input to output in place
 MathAdd:
 	; 4 cases:
@@ -237,6 +249,8 @@ MathAdd:
 	NumToSignAddr D, E
 
 	ld A, [DE]
+; common part to MathAdd and MathSub starts here
+MathAddSubCommon:
 	xor [HL] ; set z if both + or both -
 	jr nz, .different_signs
 
@@ -344,5 +358,4 @@ VecNegate:
 MathSquare:
 MathMultiply:
 MathAddNoOut:
-MathSub:
 	ret
