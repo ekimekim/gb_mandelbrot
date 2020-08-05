@@ -26,6 +26,30 @@ class Memory(object):
 		# this is needed for passing in binary strings
 		self.contents = [ord(x) if isinstance(x, basestring) else x for x in contents]
 
+	def as_rle(self):
+		"""Yield a list of (count, value) which expresses the memory contents using Run Length Encoding"""
+		if not self.contents:
+			return
+		prev = self.contents[0]
+		count = 1
+		for value in self.contents[1:]:
+			if value == prev:
+				count += 1
+				continue
+			yield count, prev
+			prev = value
+			count = 1
+		yield count, prev
+
+	def __repr__(self):
+		to_hex = lambda value: "??" if value is None else "{:02x}".format(value)
+		return "<Memory {}>".format(
+			" ".join(
+				to_hex(value) if count == 1 else "{}x{}".format(count, to_hex(value))
+				for count, value in self.as_rle()
+			)
+		)
+
 
 test_order = 0
 class Test(object):
