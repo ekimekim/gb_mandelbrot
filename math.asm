@@ -354,8 +354,13 @@ VecNegate:
 	ret
 
 
+; This is only used to check for overflow, and even that is really just an optimization
+; by figuring out it's going to escape 1 iteration sooner.
+; We can safely no-op it for now.
+MathAddNoOut:
+	xor A ; clear carry
+	ret
+
 ; TODO stubs
 MathSquare:
 MathMultiply:
-MathAddNoOut:
-	ret
