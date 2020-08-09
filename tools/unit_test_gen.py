@@ -313,7 +313,12 @@ def process_file(top_level_dir, include_dir, tests_dir, extra_link_dirs, objs_di
 	link_paths = [os.path.join(top_level_dir, '{}.o'.format(link_file)) for link_file in link_files]
 
 	gendir = os.path.join(tests_dir, name)
-	if not os.path.exists(gendir):
+	if os.path.exists(gendir):
+		# Delete existing contents to clear stale tests
+		for filename in os.listdir(gendir):
+			if any(filename.endswith(ext) for ext in ['.asm', '.o', '.sym', '.gb']):
+				os.remove(os.path.join(gendir, filename))
+	else:
 		os.mkdir(gendir)
 
 	for i, (testname, test) in enumerate(sorted(tests.items(), key=lambda (n,t): t.order)):
