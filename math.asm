@@ -391,6 +391,14 @@ MathAddNoOut:
 ;  of the first two bits. So we treat result as being the concatenation (x, B) where x
 ;  is just one byte, so every bit that is originally part of B is shifted out by the time
 ;  we are finished, and at the end we do a shift >> 6 to bring result back into B proper.
+; So now our algo looks like:
+;  result_lead_byte = 0
+;  for i in [0, p)
+;    for j in [0, 8)
+;      B, carry = B >> 1
+;      if carry
+;        (result_lead_byte, B) += A with i precision
+;  B >>= 6
 
 
 ; Handle sign, call MathMultiplyUnsigned
@@ -398,11 +406,12 @@ MathMultiply:
 	ret ; TODO
 
 
-; Sign is always positive, call MathMultiplyUnsigned with the same input twice
+; Sign is always positive, copy input to output then call MathMultiplyUnsigned to do output *= input
 ; TODO improve later
 MathSquare:
 	ret ; TODO
 
 
-; 
+; Internal helper. Obeys same calling conventions as Math functions, except HL and DE
+; should be vector addresses. Multiplies HL by DE, updating HL in place.
 MathMultiplyUnsigned:
