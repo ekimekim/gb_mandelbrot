@@ -13,37 +13,37 @@ class Vecs(object):
 def model_mul(v1, v2, precision):
 	"""Takes two lists of bytes that are encoded values PRECISION bytes long,
 	and multiplies them according to the same algorithm used in the asm."""
-    def partial_add(a, b, p):
-        carry = 0
-        for i in range(p)[::-1]:
-            carry, a[i] = divmod(a[i] + b[i] + carry, 256)
-        return carry
+	def partial_add(a, b, p):
+		carry = 0
+		for i in range(p)[::-1]:
+			carry, a[i] = divmod(a[i] + b[i] + carry, 256)
+		return carry
 
-    def shift_right(a):
-        carry = 0
-        for i in range(len(a)):
-            a[i], carry = divmod(a[i] + 256 * carry, 2)
-        return carry
+	def shift_right(a):
+		carry = 0
+		for i in range(len(a)):
+			a[i], carry = divmod(a[i] + 256 * carry, 2)
+		return carry
 
 	# makes a copy of v2 with an extra byte prepended,
 	# in real code this is in-place.
-    result = [0] + v2
+	result = [0] + v2
 
-    for i in range(precision):
-        for j in range(8):
+	for i in range(precision):
+		for j in range(8):
 			next_bit = shift_right(result)
-            if next_bit:
-                carry = partial_add(result, v1, i + 1)
-                if carry:
-                    raise ValueError("overflow")
+			if next_bit:
+				carry = partial_add(result, v1, i + 1)
+				if carry:
+					raise ValueError("overflow")
 
-    for x in range(7):
-        shift_right(result)
+	for x in range(7):
+		shift_right(result)
 
 	if result[0]:
 		raise ValueError("overflow")
 
-    return result[1:]
+	return result[1:]
 
 
 for precision in [2, 3, 8, 255, 256]:
@@ -84,6 +84,8 @@ for precision in [2, 3, 8, 255, 256]:
 		for value in (BaseX, BaseY, CX, CY, X, Y, YSq):
 			if value is None:
 				vec, sign = [], None
+			elif isinstance(value, tuple):
+				vec, sign = value
 			else:
 				vec, sign = encode_value(value)
 			vec += [None] * (256 - len(vec)) # pad
@@ -124,6 +126,16 @@ for precision in [2, 3, 8, 255, 256]:
 	add_pos_sub_underflow = Test('MathAdd', **test_regs(in1=value1, in2=-value2, out=value1-value2, carry=0))
 	add_carry = Test('MathAdd', **test_regs(in1=3 + value1, in2=value2, out=(3+value1+value2) % 4, carry=1))
 	sub_pos_pos = Test('MathSub', **test_regs(in1=value1, in2=value2, out=value1-value2, carry=0))
+
+	value1 = random_value()
+	value2 = random_value()
+	v1e, v2e = [encode_value(v)[0] for v in (value1, value2)]
+	square_result = model_mul(v1e, v1e, precision)
+	mul_result = model_mul(v1e, v2e, precision)
+	square = Test('MathSquare', **test_regs(in2=value1, out=(square_result, 0), carry=0))
+	mul_pos_pos = Test('MathMultiply', **test_regs(in1=value1, in2=value2, out=(mul_result, 0), carry=0))
+	mul_pos_neg = Test('MathMultiply', **test_regs(in1=value1, in2=-value2, out=(mul_result, 1), carry=0))
+	square_overflow = Test('MathSquare', **test_regs(in2=2 + abs(value1), carry=1))
 
 	# find all new tests, rename them to include precision
 	for name, value in globals().items():

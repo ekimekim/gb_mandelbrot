@@ -193,6 +193,9 @@ MathCopy:
 	; get vec addresses
 	SignAddrToVecHigh H, L
 	SignAddrToVecHigh D, E
+	; fallthrough
+; sub-function that just does the Vec part, takes HL and DE vec addresses.
+VecCopy:
 	; copy vec, starting from C
 	ld L, C
 	ld E, C
@@ -407,17 +410,149 @@ MathAddNoOut:
 ;  return B
 
 
-; Handle sign, call MathMultiplyUnsigned
+; Handle sign, call VecMultiply
 MathMultiply:
-	ret ; TODO
+	; sign handling: if signs match, +. otherwise, -.
+
+	; get sign addresses
+	NumToSignAddr H, L
+	NumToSignAddr D, E
+
+	ld A, [DE]
+	xor [HL] ; 0 if signs match, else 1
+	ld [HL], A ; set sign to 0 (+) if signs match, or 1 (-) if they don't
+
+	SignAddrToVecHigh H, L
+	SignAddrToVecHigh D, E
+	jr VecMultiply ; tail call
 
 
-; Sign is always positive, copy input to output then call MathMultiplyUnsigned to do output *= input
+; Sign is always positive, copy input to output then call VecMultiply to do output *= input
 ; TODO improve later
 MathSquare:
-	ret ; TODO
+	; write positive sign
+	NumToSignAddr H, L
+	xor A
+	ld [HL], A
+
+	; get addresses
+	SignAddrToVecHigh H, L
+	NumToVecHigh D, E
+
+	; copy DE to HL
+	call VecCopy
+
+	; tail call the actual multiply
+	jr VecMultiply
 
 
 ; Internal helper. Obeys same calling conventions as Math functions, except HL and DE
 ; should be vector addresses. Multiplies HL by DE, updating HL in place.
-MathMultiplyUnsigned:
+; Returns with carry on overflow. In this case the value in HL is undefined.
+; As always, C is number of bytes - 1 and B is preserved.
+VecMultiply:
+	push BC
+	; We'll be using B as the leading byte of a 1-longer vector (B, [HL]).
+	; We track current loop iteration in E, comparing it to C to know when we're done.
+	ld B, E ; L and E are known to be 0 here, so this saves a byte over ld B, 0
+.loop ; loop runs for each byte
+REPT 8 ; for each bit in the byte
+	call VecMulShiftRight ; (B, [HL]) >>= 1, set carry to last bit
+	jr nc, .no_add\@
+	; on carry, add DE to result
+	call VecMulAdd ; (B, [HL]) += [D0], but only up to precision E
+	; on carry, exit with carry. We still need to pop BC before we do.
+	jr c, .ret
+.no_add\@
+ENDR
+	inc E ; increase loop counter
+	; check if E == C + 1, indicating we're done
+	ld A, C
+	inc A
+	cp E ; set z if E == C + 1
+	jr nz, .loop
+
+	; Finally, shift (B, [HL]) down into HL, or return with carry if top bit of B is set
+	; (ie. B would be non-0 after shift).
+	; This is best done by shifting left and moving 1 byte down.
+	; We do this in a loop:
+	;   at start of loop, bottom 7 bits of A are the 7 bits moved down from prev byte
+	;   B = [HL]
+	;   rotate (A, B) left by 1, so A contains the prev 7 bits then the top bit of B
+	;   move A -> [HL] and inc HL
+	;   shift B right by 1 and put it in A so it's ready for next round
+
+	; Special first case, to check for overflow in B. This is similar to subsequent loops
+	; but B and A are switched.
+	ld A, [HL]
+	rla
+	rl B ; B = new [HL], set carry if overflow
+	jr c, .ret ; return with carry on overflow
+	ld [HL], B
+	; handle special case where precision is 1. note E = C + 1 from above.
+	dec E
+	jr z, .skip_shift_loop
+	inc L ; need to do this manually for this loop because B and A are switched
+.shift_loop
+	rra ; rotate A back right, so that bottom 7 bits are same as old [HL]
+	ld B, [HL]
+	rl B ; rotate B left through carry, carry is now top bit of old [HL]
+	rla ; rotate A left through carry, A is now bottom 7 bits of old A + top bit of old [HL]
+	ld [HL+], A ; store new [HL] and inc
+	ld A, B ; move B to A, ready for next loop
+	dec E
+	jr nz, .shift_loop
+.skip_shift_loop
+	; ensure carry is always clear before returning
+	xor A
+
+.ret
+	pop BC
+	ret
+
+
+; Internal helper. Shifts the lengthened vec (B, [HL]) right 1 bit in place (adding a 0 to left),
+; returning the final bit in carry.
+; Clobbers A
+VecMulShiftRight:
+	; count iterations in A
+	ld A, C
+	inc A
+	; hard-coded first iteration for B
+	srl B ; shift B right (MSB = 0), put bottom bit in carry
+.loop
+	; shift right once, putting carry in LSB and putting MSB in carry
+	rr [HL]
+	inc L ; note doesn't affect carry
+	jr nz, .loop
+	ld L, A ; A = 0 here so we reset L to input value
+	; final carry is output
+	ret
+
+
+; Internal helper. Special-cased add for implementating multiplication.
+; Adds vec beginning at [D0] to the lengthened vec (B, [HL]), but only
+; up to [DE]. Returns whether addition overflowed in carry.
+; Clobbers A
+VecMulAdd:
+	push DE
+	ld A, E
+	and A ; set z if E = 0. also clears carry.
+	jr z, .skip_loop
+	ld L, A
+	dec L ; L = E - 1, so [HL] points 1 byte less into vec than [DE]
+.loop
+	ld A, [DE]
+	adc [HL]
+	ld [HL-], A
+	dec E
+	jr nz, .loop
+.skip_loop
+	; special case final loop. note L is now back to 0 as per input.
+	ld A, [DE]
+	adc B
+	ld B, A
+	; restore original E
+	pop DE
+	; return final carry
+	ret
