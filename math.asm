@@ -356,11 +356,53 @@ VecNegate:
 
 ; This is only used to check for overflow, and even that is really just an optimization
 ; by figuring out it's going to escape 1 iteration sooner.
-; We can safely no-op it for now.
+; We can safely no-op it for now. TODO improve later.
 MathAddNoOut:
 	xor A ; clear carry
 	ret
 
-; TODO stubs
-MathSquare:
+
+; To carry out multiplication A * B, we follow the basic integer algorithm:
+;   result = 0
+;   for i = 0 to number of bits
+;     if ith bit of B is set
+;       result += A << i
+; This gives us a result in twice as many bits as A and B.
+; However, in our case our true values are (integer value) * 2^(2 - 8 * precision)
+;  so our result should be (integer multiplication result) * 2^(4 - 16 * precision)
+;  but then truncated back into our normal range.
+; Assuming we're ok with a small error, we can just discard any amount smaller
+;  than our precision when adding to result.
+; Practical concerns around bit shifting vs bytes mean our actual algo looks more like:
+;   result = 0
+;   for i in [0, p), bb in reverse(B)
+;     for b in bb (LSB first)
+;       if b
+;         result += A with i precision
+;       result >>= 1
+;   result <<= 2 to restore to correct scale
+; Except this makes us lose 2 bits of precision by shifting then shifting back
+;  so when we do result >>= 1 we should carry lost bits into a temp var
+;  and then when we <<= 2 we should restore the extra 2 bits from there
+;  and/or special case to just avoid doing the final >> 1 entirely.
+; But now we're dealing with 3 vectors instead of 2, but look closely: we're consuming
+;  bits from B at the same rate we're shifting result downward.
+; This means we can get away with using B as result, except for the small overlap
+;  of the first two bits. So we treat result as being the concatenation (x, B) where x
+;  is just one byte, so every bit that is originally part of B is shifted out by the time
+;  we are finished, and at the end we do a shift >> 6 to bring result back into B proper.
+
+
+; Handle sign, call MathMultiplyUnsigned
 MathMultiply:
+	ret ; TODO
+
+
+; Sign is always positive, call MathMultiplyUnsigned with the same input twice
+; TODO improve later
+MathSquare:
+	ret ; TODO
+
+
+; 
+MathMultiplyUnsigned:

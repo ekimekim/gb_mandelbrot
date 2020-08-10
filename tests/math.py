@@ -10,6 +10,46 @@ class Vecs(object):
 	BaseX, BaseY, CX, CY, X, Y, YSq = range(7)
 
 
+def model_mul(v1, v2, precision):
+	"""Takes two lists of bytes that are encoded values PRECISION bytes long,
+	and multiplies them according to the same algorithm used in the asm."""
+    def partial_add(a, b, p):
+        carry = 0
+        for i in range(p)[::-1]:
+            carry, a[i] = divmod(a[i] + b[i] + carry, 256)
+        return carry
+
+    def shift_right(a):
+        carry = 0
+        for i in range(len(a)):
+            a[i], carry = divmod(a[i] + 256 * carry, 2)
+        return carry
+
+    def shift_left(a):
+        carry = 0
+        for i in range(len(a))[::-1]:
+            carry, a[i] = divmod(2 * a[i] + carry, 256)
+        return carry
+
+    result = [0] * (precision + 1)
+    for i in range(precision):
+        v2_byte = v2[-(i+1)]
+        for j in range(8):
+            v2_bit = (v2_byte >> j) & 1
+            if v2_bit:
+                carry = partial_add(result, v1, i + 1)
+                if carry:
+                    raise ValueError("overflow")
+            shift_right(result)
+
+    for x in range(2):
+        carry = shift_left(result)
+        if carry:
+            raise ValueError("overflow")
+
+    return result[:precision]
+
+
 for precision in [2, 3, 8, 255, 256]:
 	def encode_value(value):
 		"""Returns byte list for vector and sign byte representing given value.
