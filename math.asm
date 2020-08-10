@@ -390,15 +390,21 @@ MathAddNoOut:
 ; This means we can get away with using B as result, except for the small overlap
 ;  of the first two bits. So we treat result as being the concatenation (x, B) where x
 ;  is just one byte, so every bit that is originally part of B is shifted out by the time
-;  we are finished, and at the end we do a shift >> 6 to bring result back into B proper.
+;  we are finished, and at the end we do a shift >> 6 to bring result back into B proper
+;  (actually this ends up being 7 because we don't shift after the final iteration).
 ; So now our algo looks like:
-;  result_lead_byte = 0
+;  extra_byte = 0
+;  let B' = (extra_byte, B)
 ;  for i in [0, p)
 ;    for j in [0, 8)
-;      B, carry = B >> 1
+;      B', carry = B' >> 1
 ;      if carry
-;        (result_lead_byte, B) += A with i precision
-;  B >>= 6
+;        B' += A with i precision
+;        on carry exit with overflow error
+;  B' >>= 7
+;  if extra_byte > 0
+;    exit with overflow error
+;  return B
 
 
 ; Handle sign, call MathMultiplyUnsigned

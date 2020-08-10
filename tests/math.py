@@ -25,29 +25,25 @@ def model_mul(v1, v2, precision):
             a[i], carry = divmod(a[i] + 256 * carry, 2)
         return carry
 
-    def shift_left(a):
-        carry = 0
-        for i in range(len(a))[::-1]:
-            carry, a[i] = divmod(2 * a[i] + carry, 256)
-        return carry
+	# makes a copy of v2 with an extra byte prepended,
+	# in real code this is in-place.
+    result = [0] + v2
 
-    result = [0] * (precision + 1)
     for i in range(precision):
-        v2_byte = v2[-(i+1)]
         for j in range(8):
-            v2_bit = (v2_byte >> j) & 1
-            if v2_bit:
+			next_bit = shift_right(result)
+            if next_bit:
                 carry = partial_add(result, v1, i + 1)
                 if carry:
                     raise ValueError("overflow")
-            shift_right(result)
 
-    for x in range(2):
-        carry = shift_left(result)
-        if carry:
-            raise ValueError("overflow")
+    for x in range(7):
+        shift_right(result)
 
-    return result[:precision]
+	if result[0]:
+		raise ValueError("overflow")
+
+    return result[1:]
 
 
 for precision in [2, 3, 8, 255, 256]:
