@@ -524,6 +524,7 @@ VecMulShiftRight:
 	; shift right once, putting carry in LSB and putting MSB in carry
 	rr [HL]
 	inc L ; note doesn't affect carry
+	dec A
 	jr nz, .loop
 	ld L, A ; A = 0 here so we reset L to input value
 	; final carry is output
@@ -548,10 +549,12 @@ VecMulAdd:
 	dec E
 	jr nz, .loop
 .skip_loop
-	; special case final loop. note L is now back to 0 as per input.
+	; special case final loop. note HL has underflowed to (H-1, ff)
 	ld A, [DE]
 	adc B
 	ld B, A
+	; restore original H and L
+	inc HL
 	; restore original E
 	pop DE
 	; return final carry
