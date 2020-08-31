@@ -548,13 +548,13 @@ VecMulAdd:
 	ld [HL-], A
 	dec E
 	jr nz, .loop
+	; restore HL back to original value, since it underflowed in last iteration
+	inc HL
 .skip_loop
-	; special case final loop. note HL has underflowed to (H-1, ff)
+	; special case final loop
 	ld A, [DE]
 	adc B
 	ld B, A
-	; restore original H and L
-	inc HL
 	; restore original E
 	pop DE
 	; return final carry
