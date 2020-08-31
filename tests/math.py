@@ -127,8 +127,8 @@ for precision in [2, 3, 8, 255, 256]:
 	add_carry = Test('MathAdd', **test_regs(in1=3 + value1, in2=value2, out=(3+value1+value2) % 4, carry=1))
 	sub_pos_pos = Test('MathSub', **test_regs(in1=value1, in2=value2, out=value1-value2, carry=0))
 
-	value1 = random_value()
-	value2 = random_value()
+	value1 = uniform(exp=1)
+	value2 = uniform(exp=1)
 	v1e, v2e = [encode_value(v)[0] for v in (value1, value2)]
 	square_result = model_mul(v1e, v1e, precision)
 	mul_result = model_mul(v1e, v2e, precision)
