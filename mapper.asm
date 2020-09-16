@@ -5,17 +5,12 @@
 
 ; The calculation process proceeds linearly through the map.
 ; If the user makes a change that causes the render to be aborted,
-; we restart from the start but leave old values intact.
-; Our behaviour when we reach these old values depends on the nature of the change:
-; 1. Change in precision: Replace all values
-; 2. Increase in max iterations by N:
-;      Re-calculate zeroes (previously ran out of iterations, might not now)
-;      Add N to non-zeroes (if it previously had M iterations remaining, it now has M+N)
-; 3. Decrease in max iterations by N:
-;      Subtract N from all values (min 0)
-; 4. Zoom in / out
-;      For now, replace all values.
-;      Future work: remap existing values then fill in the gaps
+; we restart from the start.
+
+; When we finish a block of 8 pixels, we call to the painter to color those pixels.
+; We also track our current position in the array, for two reasons:
+; a) so the vblank copy knows what needs updating
+; b) so we can place a sprite on the current calculation point, to show user
 
 ; The mechanism of abort is interesting. Rather than bothering to build in a way
 ; to reset to the main routine, we just reset our stack from the interrupt handler
