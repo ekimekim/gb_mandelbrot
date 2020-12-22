@@ -137,6 +137,15 @@ for precision in [2, 3, 8, 255, 256]:
 	mul_pos_neg = Test('MathMultiply', **test_regs(in1=value1, in2=-value2, out=(mul_result, 1), carry=0))
 	square_overflow = Test('MathSquare', **test_regs(in2=2 + abs(value1), carry=1))
 
+	full_escape = Test('GetIterations', in_C=precision-1, in_B=32,
+		in_VectorsBase = vecmem(CX='-0.8', CY='-0.2'),
+		out_B=16,
+	)
+	full_no_escape = Test('GetIterations', in_C=precision-1, in_B=250,
+		in_VectorsBase = vecmem(CX='-0.1', CY='0.7'),
+		out_B=0,
+	)
+
 	# find all new tests, rename them to include precision
 	for name, value in globals().items():
 		if isinstance(value, Test) and not name.endswith("_p"):
