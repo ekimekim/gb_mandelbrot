@@ -19,13 +19,31 @@
 
 SECTION "Mapper Data", WRAM0
 
-IterationMap:
-	ds 160 * 144
-
 NextToCalc::
 	; (x, y) point on screen
 	ds 2
 
+
+; The iteration map is 22.5KiB. Since we need to be on GBC to get full pixel mapping anyway,
+; we can use the WRAMX banks to store all the data.
+; The iteration map is a row-major array of the remaining number of iterations when the value escaped.
+; It is stored linearly starting in the first bank, filling each bank before moving to the next.
+; In other words, for index (x, y):
+;   Let N = 160 * x + y
+;   The bank is 1 + N >> 12 and the address is IterationMapBase + (N & 0x0fff).
+SECTION "Iteration Map Bank 1", WRAMX, BANK[1]
+IterationMapBase:
+	ds 4096
+SECTION "Iteration Map Bank 2", WRAMX, BANK[2]
+	ds 4096
+SECTION "Iteration Map Bank 3", WRAMX, BANK[3]
+	ds 4096
+SECTION "Iteration Map Bank 4", WRAMX, BANK[4]
+	ds 4096
+SECTION "Iteration Map Bank 5", WRAMX, BANK[5]
+	ds 4096
+SECTION "Iteration Map Bank 6", WRAMX, BANK[6]
+	ds (144 * 160) - (4096 * 5)
 
 SECTION "Mapper code", ROM0
 
