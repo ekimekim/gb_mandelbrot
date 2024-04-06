@@ -94,7 +94,6 @@ SECTION "Math Methods", ROM0
 
 ; MathCall FUNCTION OUTPUT INPUT
 ; Loads output and input vector numbers before calling given Math* function.
-; Assumes L and E are already 0.
 MathCall: MACRO
 	ld H, \2
 	ld D, \3
@@ -110,6 +109,7 @@ ENDM
 ; Given CX and CY, calculate how many iterations it takes for Z to escape.
 ; Takes a max number of iterations in B (with 0 meaning 256). Decrements B
 ; for each iteration, so on return B=0 always means "hit max iterations".
+; Preserves C, clobbers otherwise.
 GetIterations:
 	; special case first iteration, where z = 0 so iteration is z = 0^2 + c = c
 	MathCall MathCopy, X, CX
@@ -558,4 +558,33 @@ VecMulAdd:
 	; restore original E
 	pop DE
 	; return final carry
+	ret
+
+
+; Set first byte and sign byte of a given vec, zeroing the rest.
+; Intended for initialization at coarse values.
+; H: Vector number to set
+; D: Value for sign byte
+; E: Value for most signifigant byte
+; C: Precision
+MathSet:
+	NumToSignAddr H, L
+	ld [HL], D
+	SignAddrToVecHigh H, L
+	ld L, C
+	xor A
+.loop
+	ld [HL], A
+	dec L
+	jr nz, .loop
+
+	; write MSB value
+	ld [HL], E
+	ret
+
+
+; Increment the H vector by 4 >> A.
+; Unlike most Math functions, preserves DE but not B.
+MathAddPowerOfTwo:
+	; TODO
 	ret
