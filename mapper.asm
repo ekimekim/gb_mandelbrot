@@ -62,13 +62,11 @@ VRAMBufferTail::
 ; State for VRAM writer.
 ; Addr is next address to write (big-endian).
 ; X is number of tiles (1-20) remaining in current row.
-; Y is number of rows (1-72) remaining in half of screen.
 ; Bank is 0 or 1 for first or second half of screen respectively.
+; Note order matters here due to read optimizations.
 VRAMWriteAddr::
 	dw
 VRAMWriteX::
-	db
-VRAMWriteY::
 	db
 VRAMWriteBank::
 	db
@@ -255,18 +253,46 @@ FlushVRAMBuffer:
 	; Set VRAM bank
 	ld A, [HL-]
 	ld [CGBVRAMBank], A
-	; D = Y counter
+	; C = X counter
 	ld A, [HL-]
-	ld D, A
-	; E = X counter
-	ld A, [HL-]
-	ld E, A
+	ld C, A
 	; HL = write addr
 	ld A, [HL-]
 	ld H, [HL]
 	ld L, A
 	jr .col_loop
 
+	; DE = read addr
+	ld D, HIGH(VRAMBuffer)
+	ld A, [VRAMBufferHead]
+	ld E, A
+
+	jr .pair_loop
+
+.switch_bank
+	ld A, 1
+	ld [VRAMWriteBank], A
+	ld [CGBVRAMBank], A
+	ld HL, BaseTileMap
+	jr .pair_loop
+
 .row_loop
-	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
 	ld E, 20
+
+	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
+	LongSub HL, 322, HL
+	; Check if our new position is past the end of the BaseTileMap (>= AltTileMap).
+	; If so, switch to second bank before starting the next loop.
+	ld A, H
+	cp HIGH(AltTileMap)
+	jr nc, .switch_bank
+
+.pair_loop
+	ld A, [DE]
+	inc E ; we explicitly want to wrap on overflow here
+	ld [HL+], A
+	ld A, [DE]
+	inc E ; and again
+	ld [HL+], A
+
+	; HL += 14
