@@ -1,4 +1,6 @@
-
+include "vram.asm"
+include "hram.asm"
+include "ioregs.asm"
 
 /*
 This code handles managing the visible part of the set, calculating it and drawing to screen.
@@ -86,11 +88,6 @@ VRAMBuffer::
 SECTION "Mapper code", ROM0
 
 MapperInit:
-	; Init VRAM Buffer
-	xor A
-	ld [VRAMBufferHead], A
-	ld [VRAMBufferTail], A
-
 	; Set initial Delta = 1/64 = 2^-6, so DeltaExp = 8
 	ld A, 8
 	ld [DeltaExp], A
@@ -108,6 +105,25 @@ MapperInit:
 	ld E, %10001000
 	ld H, BaseY
 	call MathSet
+	; fallthrough to ResetVRAMWrite
+
+ResetVRAMWrite:
+	; Set buffer head/tail to 0
+	xor A
+	ld [VRAMBufferHead], A
+	ld [VRAMBufferTail], A
+
+	; Initialize writer state
+	ld [VRAMWriteBank], A
+	ld A, 20
+	ld [VRAMWriteX], A
+	ld A, 72 ; half the screen, before switching banks
+	ld [VRAMWriteY], A
+	; write addr = BaseTileMap, little endian
+	xor A
+	ld [VRAMWriteAddr], A ; low byte is 0
+	ld A, HIGH(BaseTileMap)
+	ld [VRAMWriteAddr], A
 
 	ret
 
