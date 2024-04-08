@@ -59,9 +59,13 @@ VRAMBufferHead::
 VRAMBufferTail::
 	db
 
-; State for VRAM writer. X is number of tiles (1-20) remaining in current row.
+; State for VRAM writer.
+; Addr is next address to write (big-endian).
+; X is number of tiles (1-20) remaining in current row.
 ; Y is number of rows (1-72) remaining in half of screen.
 ; Bank is 0 or 1 for first or second half of screen respectively.
+VRAMWriteAddr::
+	dw
 VRAMWriteX::
 	db
 VRAMWriteY::
@@ -226,3 +230,43 @@ PopulateMap:
 	jr nz, .y_loop
 
 	ret
+
+
+; Must be called while VRAM is writable (during vblank, or screen is off).
+; Not re-entrant (assumes exclusive access to VRAM buffer), generally expected to be called with
+; interrupts disabled.
+; Assumes a time limit of TODO remaining during VBlank, and flushes as much of the buffer as it can
+; within that time.
+FlushVRAMBuffer:
+	; Determine buffer length
+	ld A, [VRAMBufferTail]
+	sub [VRAMBufferHead]
+	ret z ; return if length == 0, ie. there's nothing to do
+
+	; Halve buffer length. Note we assume buffer length is always even as we always write pairs.
+	; Since it's even, rotation puts 0 in the top bit and saves a cycle over srl A.
+	rrca
+	ld B, A ; B = number of pairs to read.
+
+	; TODO cap B for time.
+
+	; Load state. Use loads from HL, faster than multiple ld A, [nn].
+	ld HL, VRAMWriteBank
+	; Set VRAM bank
+	ld A, [HL-]
+	ld [CGBVRAMBank], A
+	; D = Y counter
+	ld A, [HL-]
+	ld D, A
+	; E = X counter
+	ld A, [HL-]
+	ld E, A
+	; HL = write addr
+	ld A, [HL-]
+	ld H, [HL]
+	ld L, A
+	jr .col_loop
+
+.row_loop
+	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
+	ld E, 20
