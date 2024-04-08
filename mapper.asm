@@ -3,29 +3,27 @@ include "hram.asm"
 include "ioregs.asm"
 include "vectors.asm"
 
-/*
-This code handles managing the visible part of the set, calculating it and drawing to screen.
-In addition to the BaseX and BaseY values defined in math.asm which represent the top left corner,
-we have a "delta" which is the value which one pixel adds to that value.
-
-We limit delta to always be a power of 2, so it can be represented by a single u8, ie:
-	delta = 2^-N
-This is trivial to add to the current CX/CY, fast and without rounding errors.
-
-Initial conditions are:
-	BaseX = -2.25
-	BaseY = -2.125
-	Delta = 1/64
-This gives us an initial bounding box (-2.25, -2.125) to (2.25, 2.125).
-
-Due to memory constraints, we store the calculation output directly as pixels in the VRAM.
-Due to not being able to write to VRAM except during VBlank, we use a circular buffer
-to buffer pending writes.
-
-We process points in top-to-bottom, left-to-right, not in the order they're laid out in memory
-(in blocks of 8x8). This optimizes for less operations involving "what's the current point"
-even though it makes writing to screen slower.
-*/
+; This code handles managing the visible part of the set, calculating it and drawing to screen.
+; In addition to the BaseX and BaseY values defined in math.asm which represent the top left corner,
+; we have a "delta" which is the value which one pixel adds to that value.
+;
+; We limit delta to always be a power of 2, so it can be represented by a single u8, ie:
+; 	delta = 2^-N
+; This is trivial to add to the current CX/CY, fast and without rounding errors.
+;
+; Initial conditions are:
+; 	BaseX = -2.25
+; 	BaseY = -2.125
+; 	Delta = 1/64
+; This gives us an initial bounding box (-2.25, -2.125) to (2.25, 2.125).
+;
+; Due to memory constraints, we store the calculation output directly as pixels in the VRAM.
+; Due to not being able to write to VRAM except during VBlank, we use a circular buffer
+; to buffer pending writes.
+;
+; We process points in top-to-bottom, left-to-right, not in the order they're laid out in memory
+; (in blocks of 8x8). This optimizes for less operations involving "what's the current point"
+; even though it makes writing to screen slower.
 
 
 SECTION "Mapper Data", WRAM0
@@ -33,13 +31,13 @@ SECTION "Mapper Data", WRAM0
 
 ; How many bits deep (MSB first) to increment when moving from one point to the next.
 ; Equivalently, delta = 4 >> DeltaExp = 2^(2 - DeltaExp)
-DeltaExp::
+DeltaExp:
 	db
 
 ; How many bytes to use when doing math. This number represents UI state
 ; and we need to be careful when it's updated that we zero-initialize any newly-added
 ; bytes in BaseX / BaseY.
-Precision::
+Precision:
 	db
 
 ; Thresholds for coloring a pixel based on the number of iterations.
@@ -48,7 +46,7 @@ Precision::
 ;   PaletteThresholds[0] > iterations >= PaletteThresholds[1]
 ;   PaletteThresholds[1] > iterations >= PaletteThresholds[2]
 ;   PaletteThresholds[2] > iterations
-PaletteThresholds::
+PaletteThresholds:
 	ds 3
 
 ; Head and tail indexes into VRAM Buffer.
@@ -57,9 +55,9 @@ PaletteThresholds::
 ;  It is always safe to write to buffer[tail], even if the queue is full.
 ;    But you would not be able to *commit* these writes until head has advanced.
 ;  The number of items in the queue is tail - head.
-VRAMBufferHead::
+VRAMBufferHead:
 	db
-VRAMBufferTail::
+VRAMBufferTail:
 	db
 
 ; State for VRAM writer.
@@ -67,13 +65,13 @@ VRAMBufferTail::
 ; X is number of tiles (1-20) remaining in current row.
 ; Bank is 0 or 1 for first or second half of screen respectively.
 ; Note order matters here due to read optimizations.
-VRAMWriteAddr::
+VRAMWriteAddr:
 	dw
-VRAMWriteX::
+VRAMWriteX:
 	db
-VRAMWriteY::
+VRAMWriteY:
 	db
-VRAMWriteBank::
+VRAMWriteBank:
 	db
 
 
@@ -82,13 +80,13 @@ SECTION "Mapper VRAM Buffer", WRAM0, ALIGN[8]
 ; 256 bytes to write into VRAM. The order in which things are written matters,
 ; as the reader copies them into VRAM in a prescribed order: Each pair of bytes is one
 ; row of one tile, and are written row by row (top-to-bottom), NOT tile by tile.
-VRAMBuffer::
+VRAMBuffer:
 	ds 256
 
 
 SECTION "Mapper code", ROM0
 
-MapperInit:
+MapperInit::
 	; Set initial Delta = 1/64 = 2^-6, so DeltaExp = 8
 	ld A, 8
 	ld [DeltaExp], A
@@ -133,7 +131,7 @@ ResetVRAMWrite:
 ;  BaseX, BaseY, DeltaExp, Precision, PaletteThresholds
 ;  Note that all internal state in this function is kept in registers/stack.
 ;  This is important as this function can be LongJmp'd out of and restarted.
-PopulateMap:
+PopulateMap::
 	ld A, [Precision]
 	ld C, A
 
@@ -263,7 +261,7 @@ PopulateMap:
 ;     Total: preamble + bank cross + pairs * (complete row) / 20 = 73 + 19.85 * pairs
 ;   In CGB double speed mode, VBlank is about 2280 cycles. Assume we get ~2000 of that.
 ;   Then a rough cap is 98 pairs ~= 2018 cycles.
-FlushVRAMBuffer:
+FlushVRAMBuffer::
 	; Determine buffer length. Also stash VRAMBufferHead in D.
 	ld A, [VRAMBufferHead]
 	ld D, A

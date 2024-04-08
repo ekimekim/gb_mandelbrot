@@ -1,5 +1,6 @@
 include "ioregs.asm"
 include "vram.asm"
+include "longcalc.asm"
 
 Section "Stack", WRAM0
 
