@@ -1,6 +1,7 @@
 include "vram.asm"
 include "hram.asm"
 include "ioregs.asm"
+include "vectors.asm"
 
 /*
 This code handles managing the visible part of the set, calculating it and drawing to screen.

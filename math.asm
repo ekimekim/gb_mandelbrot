@@ -1,4 +1,4 @@
-
+include "vectors.asm"
 
 ; To compute the mandelbrot set iteration (z = z^2 + c), we need to support three operations:
 ; * Add two complex numbers
@@ -51,38 +51,16 @@ SECTION "Math Vectors", WRAM0, ALIGN[8]
 ; The vector address is calculated as high = HIGH(VectorsBase) + vector number, low = 0.
 ; The sign byte is calculated as high = HIGH(SignBytes), low = vector number.
 
-VectorsBase:
-RSRESET
-
-; Base X/Y store the bottom-left corner coordinate of the screen
-BaseX rb 1
-	ds 256
-BaseY rb 1
-	ds 256
-
-; CX/CY store the point under current consideration
-CX rb 1
-	ds 256
-CY rb 1
-	ds 256
-
-; X, Y and YSq are used during iteration as described above
-X rb 1
-	ds 256
-Y rb 1
-	ds 256
-YSq rb 1
-	ds 256
-
+VectorsBase::
+	ds 256 * NUM_VECTORS
 
 ; This is wastefully one bit per byte, but meh.
-; Each byte corresponds to a vector, in the same order as above.
-SignBytes:
-	ds 7
+; Each byte corresponds to a vector, in the same order as VectorsBase.
+SignBytes::
+	ds NUM_VECTORS
 
 
 SECTION "Math Methods", ROM0
-
 
 ; General calling conventions for Math* functions:
 ;  H: Vector number of output (may also be first input)
@@ -92,25 +70,12 @@ SECTION "Math Methods", ROM0
 ;  All non-preserved are clobbered.
 ;  Carry is set on overflow (absolute result >= 4), cleared otherwise.
 
-; MathCall FUNCTION OUTPUT INPUT
-; Loads output and input vector numbers before calling given Math* function.
-MathCall: MACRO
-	ld H, \2
-	ld D, \3
-	call \1
-ENDM
-; As above for single-arg math functions
-MathSingleCall: MACRO
-	ld H, \2
-	call \1
-ENDM
-
 
 ; Given CX and CY, calculate how many iterations it takes for Z to escape.
 ; Takes a max number of iterations in B (with 0 meaning 256). Decrements B
 ; for each iteration, so on return B=0 always means "hit max iterations".
 ; Preserves C, clobbers otherwise.
-GetIterations:
+GetIterations::
 	; special case first iteration, where z = 0 so iteration is z = 0^2 + c = c
 	MathCall MathCopy, X, CX
 	MathCall MathCopy, Y, CY
@@ -149,41 +114,8 @@ GetIterations:
 	ret
 
 
-; Macros for common parts of Math functions
-
-; Convert (vector number, *) reg pair into address of sign byte
-NumToSignAddr: MACRO
-	ld \2, \1
-	ld \1, HIGH(SignBytes)
-ENDM
-
-; Convert vector number in \1 into vector address high byte
-NumToVecHigh: MACRO
-	ld A, HIGH(VectorsBase)
-	add \1
-	ld \1, A
-ENDM
-
-; Convert sign byte address \1 \2 into vector address high byte, put into \1
-SignAddrToVecHigh: MACRO
-	ld A, HIGH(VectorsBase)
-	add \2
-	ld \1, A
-	xor A
-	ld \2, A
-ENDM
-
-; Convert vector address high byte \1 into sign byte address \1 \2
-VecHighToSignAddr: MACRO
-	ld A, \1
-	sub HIGH(VectorsBase) ; left with just the vec number
-	ld \2, A
-	ld \1, HIGH(SignBytes)
-ENDM
-
-
 ; Copy input to output
-MathCopy:
+MathCopy::
 	; get sign addresses
 	NumToSignAddr H, L
 	NumToSignAddr D, E
@@ -567,7 +499,7 @@ VecMulAdd:
 ; D: Value for sign byte
 ; E: Value for most signifigant byte
 ; C: Precision
-MathSet:
+MathSet::
 	NumToSignAddr H, L
 	ld [HL], D
 	SignAddrToVecHigh H, L
@@ -585,6 +517,6 @@ MathSet:
 
 ; Increment the H vector by 4 >> A.
 ; Unlike most Math functions, preserves DE but not B.
-MathAddPowerOfTwo:
+MathAddPowerOfTwo::
 	; TODO
 	ret
