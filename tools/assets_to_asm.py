@@ -77,8 +77,8 @@ def image_to_tiles(image, pallette, length=None):
 	}
 
 	tiles = []
-	for row in range(height / 8):
-		for col in range(width / 8):
+	for row in range(height // 8):
+		for col in range(width // 8):
 			tiles.append(extract_tile(image, row, col, pallette))
 			if length is not None and len(tiles) == length:
 				return tiles

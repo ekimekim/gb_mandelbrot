@@ -28,6 +28,9 @@ Start::
 	call InitGraphics
 	call MapperInit
 
+	ld A, IntEnableVBlank
+	ld [InterruptsEnabled], A
+
 	; Turn on screen
 	ld HL, LCDControl
 	set 7, [HL]
@@ -61,38 +64,52 @@ InitGraphics:
 	; Construct a direct pixel map to screen by mapping tiles 0 to 179 to the first 9 rows,
 	; then the same tiles in bank 1 to the second 9 rows.
 	ld HL, TileGrid - 12
-	ld D, 1
+	ld D, 0
 .grid_loop_bank
-	ld A, D
-	ld [CGBVRAMBank], A
 	ld C, 9
-	xor A
+	ld E, 0
 .grid_loop_row
 	ld B, 20
 	LongAdd HL, 12, HL ; HL += 12
 .grid_loop_tile
+	; set tile number
+	xor A
+	ld [CGBVRAMBank], A
+	ld A, E
+	ld [HL], A
+	inc E
+	; set bank
+	ld A, 1
+	ld [CGBVRAMBank], A
+	ld A, D
+	swap A
+	srl A ; set bit 3 to D
 	ld [HL+], A
-	inc A
 	dec B
 	jr nz, .grid_loop_tile
 	dec C
 	jr nz, .grid_loop_row
-	dec D
+	inc D
+	ld A, 2
+	cp D
 	jr nz, .grid_loop_bank
 
 	; Initialize pixels to 0 so startup screen isn't random noise
-	ld D, 1
+	ld D, 2
 .pixel_loop_bank
-	ld A, D
+	ld A, 2
+	sub D
 	ld [CGBVRAMBank], A
 	ld HL, BaseTileMap
 .pixel_loop
 	xor A
 REPT 16
-	ld [HL-], A
+	ld [HL+], A
 ENDR
 	ld A, H
 	cp HIGH(AltTileMap)
-	jr nc, .pixel_loop
+	jr c, .pixel_loop
 	dec D
 	jr nz, .pixel_loop_bank
+
+	ret
