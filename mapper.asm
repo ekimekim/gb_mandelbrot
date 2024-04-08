@@ -148,7 +148,7 @@ PopulateMap::
 .y_loop
 	push HL
 	ld A, [DeltaExp]
-	MathSingleCall MathAddPowerOfTwo CY
+	MathSingleCall MathAddPowerOfTwo, CY
 	pop HL
 
 .y_start
@@ -161,7 +161,7 @@ PopulateMap::
 	push HL
 
 	ld A, [DeltaExp]
-	MathSingleCall MathAddPowerOfTwo CX
+	MathSingleCall MathAddPowerOfTwo, CX
 
 .x_start
 	; First palette threshold is also max iteration count
@@ -171,7 +171,6 @@ PopulateMap::
 	; Actual calculation. Returns remaining iterations in B
 	push DE
 	call GetIterations
-	pop DE
 
 	; B is number of *remaining iterations*, which is max iterations - actual iterations.
 	; First case is that B is zero and therefore iterations >= max iterations.
@@ -180,24 +179,28 @@ PopulateMap::
 	jr z, .threshold_done ; we know B = 0 here, which is the result we want
 
 	; For the remaining comparisons, we want to compare to actual iterations.
-	; A = actual iterations = max iterations - B
+	; D = actual iterations = max iterations - B
 	ld A, [PaletteThresholds]
 	sub B
+	ld D, A
 
-	; if A >= PaletteThresholds[1], B = 1
+	; if D > PaletteThresholds[1], B = 1
 	ld B, 1
-	cp [PaletteThresholds + 1]
-	jr nc, .threshold_done
+	ld A, [PaletteThresholds + 1]
+	cp D
+	jr c, .threshold_done
 
-	; if A >= PaletteThresholds[2], B = 2
+	; if D > PaletteThresholds[2], B = 2
 	inc B
-	cp [PaletteThresholds + 2]
-	jr nc, .threshold_done
+	ld A, [PaletteThresholds + 2]
+	cp D
+	jr c, .threshold_done
 
 	; otherwise, B = 3
 	inc B
 
 .threshold_done
+	pop DE
 	; Split B into two bits and shift them into D and E
 	rr B ; c = LSB of B
 	rl E ; push the bit into the bottom of E
@@ -215,7 +218,8 @@ PopulateMap::
 	; Push to buffer
 	push HL
 	ld H, HIGH(VRAMBuffer)
-	ld L, VRAMBufferTail
+	ld A, [VRAMBufferTail]
+	ld L, A
 	; It's always safe to write to the tail entry, even if actually incrementing tail would
 	; make us full.
 	ld [HL], E
@@ -376,10 +380,10 @@ FlushVRAMBuffer::
 	ld [VRAMWriteY], A
 	ld A, L
 	ld [VRAMBufferHead], A
-	ld [VRAMBufferAddr], SP
+	ld [VRAMWriteAddr], SP
 	ld A, [FlushVRAMBufferSP]
 	ld L, A
-	ld A [FlushVRAMBufferSP+1]
+	ld A, [FlushVRAMBufferSP+1]
 	ld H, A
 	ld SP, HL
 	ret

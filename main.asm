@@ -26,7 +26,7 @@ Start::
 
 	; Init things
 	call InitGraphics
-	call InitMapper
+	call MapperInit
 
 	; Turn on screen
 	ld HL, LCDControl
