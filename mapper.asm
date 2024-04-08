@@ -28,45 +28,53 @@ even though it makes writing to screen slower.
 SECTION "Mapper Data", WRAM0
 
 
-// How many bits deep (MSB first) to increment when moving from one point to the next.
-// Equivalently, delta = 4 >> DeltaExp = 2^(2 - DeltaExp)
+; How many bits deep (MSB first) to increment when moving from one point to the next.
+; Equivalently, delta = 4 >> DeltaExp = 2^(2 - DeltaExp)
 DeltaExp::
 	db
 
-// How many bytes to use when doing math. This number represents UI state
-// and we need to be careful when it's updated that we zero-initialize any newly-added
-// bytes in BaseX / BaseY.
+; How many bytes to use when doing math. This number represents UI state
+; and we need to be careful when it's updated that we zero-initialize any newly-added
+; bytes in BaseX / BaseY.
 Precision::
 	db
 
-// Thresholds for coloring a pixel based on the number of iterations.
-// They split the space into four colors:
-//   iterations >= PaletteThresholds[0]
-//   PaletteThresholds[0] > iterations >= PaletteThresholds[1]
-//   PaletteThresholds[1] > iterations >= PaletteThresholds[2]
-//   PaletteThresholds[2] > iterations
+; Thresholds for coloring a pixel based on the number of iterations.
+; They split the space into four colors:
+;   iterations >= PaletteThresholds[0]
+;   PaletteThresholds[0] > iterations >= PaletteThresholds[1]
+;   PaletteThresholds[1] > iterations >= PaletteThresholds[2]
+;   PaletteThresholds[2] > iterations
 PaletteThresholds::
 	ds 3
 
-// Head and tail indexes into VRAM Buffer.
-// Valid values are in the range [head, tail), and head == tail means empty.
-// Note the following properties as a result:
-//  It is always safe to write to buffer[tail], even if the queue is full.
-//    But you would not be able to *commit* these writes until head has advanced.
-//  The number of items in the queue is tail - head.
+; Head and tail indexes into VRAM Buffer.
+; Valid values are in the range [head, tail), and head == tail means empty.
+; Note the following properties as a result:
+;  It is always safe to write to buffer[tail], even if the queue is full.
+;    But you would not be able to *commit* these writes until head has advanced.
+;  The number of items in the queue is tail - head.
 VRAMBufferHead::
 	db
 VRAMBufferTail::
 	db
 
-// Pointer to the next address to write values from VRAMBuffer into.
-VRAMWriteAddr::
+; State for VRAM writer. X is number of tiles (1-20) remaining in current row.
+; Y is number of rows (1-72) remaining in half of screen.
+; Bank is 0 or 1 for first or second half of screen respectively.
+VRAMWriteX::
+	db
+VRAMWriteY::
+	db
+VRAMWriteBank::
+	db
 
 
 SECTION "Mapper VRAM Buffer", WRAM0, ALIGN[8]
 
-// 256 bytes to write into VRAM. The order in which things are written matters,
-// as the reader copies them into VRAM in a prescribed order (in
+; 256 bytes to write into VRAM. The order in which things are written matters,
+; as the reader copies them into VRAM in a prescribed order: Each pair of bytes is one
+; row of one tile, and are written row by row (top-to-bottom), NOT tile by tile.
 VRAMBuffer::
 	ds 256
 
@@ -74,21 +82,21 @@ VRAMBuffer::
 SECTION "Mapper code", ROM0
 
 MapperInit:
-	// Init VRAM Buffer
+	; Init VRAM Buffer
 	xor A
 	ld [VRAMBufferHead], A
 	ld [VRAMBufferTail], A
 
-	// Set initial Delta = 1/64 = 2^-6, so DeltaExp = 8
+	; Set initial Delta = 1/64 = 2^-6, so DeltaExp = 8
 	ld A, 8
 	ld [DeltaExp], A
 
-	// Set initial precision of 1 (2 bytes), which is the bare minimum to be able to represent default Delta.
+	; Set initial precision of 1 (2 bytes), which is the bare minimum to be able to represent default Delta.
 	ld A, 1
 	ld [Precision], A
 	ld C, A
 
-	// BaseX is -2.25 = -0b10.01, BaseY is -2.125 = -0b10.001
+	; BaseX is -2.25 = -0b10.01, BaseY is -2.125 = -0b10.001
 	ld D, 1
 	ld E, %10010000
 	ld H, BaseX
@@ -102,6 +110,8 @@ MapperInit:
 
 ; All inputs come from globals:
 ;  BaseX, BaseY, DeltaExp, Precision, PaletteThresholds
+;  Note that all internal state in this function is kept in registers/stack.
+;  This is important as this function can be LongJmp'd out of and restarted.
 PopulateMap:
 	ld A, [Precision]
 	ld C, A
@@ -139,13 +149,36 @@ PopulateMap:
 	ld A, [PaletteThresholds]
 	ld B, A
 
-	; Returns remaining iterations in B
+	; Actual calculation. Returns remaining iterations in B
 	push DE
 	call GetIterations
 	pop DE
 
-	; TODO translate B into a pixel value 0-3
+	; B is number of *remaining iterations*, which is max iterations - actual iterations.
+	; First case is that B is zero and therefore iterations >= max iterations.
+	ld A, B
+	and A ; set z if zero
+	jr z, .threshold_done ; we know B = 0 here, which is the result we want
 
+	; For the remaining comparisons, we want to compare to actual iterations.
+	; A = actual iterations = max iterations - B
+	ld A, [PaletteThresholds]
+	sub B
+
+	; if A >= PaletteThresholds[1], B = 1
+	ld B, 1
+	cp [PaletteThresholds + 1]
+	jr nc, .threshold_done
+
+	; if A >= PaletteThresholds[2], B = 2
+	inc B
+	cp [PaletteThresholds + 2]
+	jr nc, .threshold_done
+
+	; otherwise, B = 3
+	inc B
+
+.threshold_done
 	; Split B into two bits and shift them into D and E
 	rr B ; c = LSB of B
 	rl E ; push the bit into the bottom of E
