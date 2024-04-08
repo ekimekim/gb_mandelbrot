@@ -60,13 +60,15 @@ VRAMBufferTail::
 	db
 
 ; State for VRAM writer.
-; Addr is next address to write (big-endian).
+; Addr is next address to write (little-endian, as per ld [nn], SP).
 ; X is number of tiles (1-20) remaining in current row.
 ; Bank is 0 or 1 for first or second half of screen respectively.
 ; Note order matters here due to read optimizations.
 VRAMWriteAddr::
 	dw
 VRAMWriteX::
+	db
+VRAMWriteY::
 	db
 VRAMWriteBank::
 	db
@@ -231,68 +233,116 @@ PopulateMap:
 
 
 ; Must be called while VRAM is writable (during vblank, or screen is off).
-; Not re-entrant (assumes exclusive access to VRAM buffer), generally expected to be called with
-; interrupts disabled.
-; Assumes a time limit of TODO remaining during VBlank, and flushes as much of the buffer as it can
-; within that time.
+; Interrupts must be disabled.
+; Assumes a time limit of 2000 cycles remaining during VBlank,
+; and flushes as much of the buffer as it can within that time.
+; Timing analysis:
+;   Preamble: 52 cycles
+;   Per pair: 21 cycles
+;   Extra per row: 17 cycles
+;   Per complete row: 20x(per pair) + extra per row = 437 cycles
+;   If bank is crossed: 17 cycles
+;   Averaging out the per row effects and assuming we do hit a bank cross:
+;     Total: preamble + bank cross + pairs * (complete row) / 20 = 69 + 21.85 * pairs
+;   In CGB double speed mode, VBlank is about 2280 cycles. Assume we get ~2000 of that.
+;   Then our cap is 88 pairs = 1991 cycles.
 FlushVRAMBuffer:
-	; Determine buffer length
+	; Determine buffer length. Also stash VRAMBufferHead in D.
+	ld A, [VRAMBufferHead]
+	ld D, A
 	ld A, [VRAMBufferTail]
-	sub [VRAMBufferHead]
+	sub D
 	ret z ; return if length == 0, ie. there's nothing to do
 
 	; Halve buffer length. Note we assume buffer length is always even as we always write pairs.
 	; Since it's even, rotation puts 0 in the top bit and saves a cycle over srl A.
+	; Enforce a max value due to time constraints.
 	rrca
+	cp 88
+	jr nc, .no_cap
+	ld A, 88
+.no_cap
 	ld B, A ; B = number of pairs to read.
 
-	; TODO cap B for time.
+	; Save stack pointer
+	ld [FlushVRAMBufferSP], SP
 
 	; Load state. Use loads from HL, faster than multiple ld A, [nn].
 	ld HL, VRAMWriteBank
 	; Set VRAM bank
 	ld A, [HL-]
 	ld [CGBVRAMBank], A
-	; C = X counter
+	; C = Y counter
 	ld A, [HL-]
 	ld C, A
-	; HL = write addr
+	; E = X counter, temporarily
+	ld A, [HL-]
+	ld E, A
+	; SP = write addr
 	ld A, [HL-]
 	ld H, [HL]
 	ld L, A
-	jr .col_loop
+	ld SP, HL
 
-	; DE = read addr
-	ld D, HIGH(VRAMBuffer)
-	ld A, [VRAMBufferHead]
-	ld E, A
+	; HL = read addr. We stashed VRAMBufferHead in D earlier.
+	ld H, HIGH(VRAMBuffer)
+	ld L, D
 
-	jr .pair_loop
+	ld A, E ; A = X counter
+	jr .start
 
-.switch_bank
+.pair_loop
+	; Check if buffer is fully written. We do this right before writing the next one
+	; so all internal state is ready for the next write.
+	dec B
+	jr z, .done
+
+.start
+	ld E, [HL]
+	inc L
+	ld D, [HL]
+	inc L ; explicitly wrap on overflow without carrying
+	push DE ; write 2 bytes
+	add SP, 14 ; skip the next 14 bytes
+
+	; check if row is finished
+	dec A
+	jr nz, .pair_loop
+
+	; reset X counter
+	ld A, 20
+
+	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
+	; add SP, n adds a signed 8-bit value, so to subtract 322 we do SP-127-127-68.
+	; This is 12 cycles but the alternatives aren't any better.
+	add SP, -127
+	add SP, -127
+	add SP, -68
+	; Decrement row counter, if zero then switch banks.
+	dec C
+	jr nz, .pair_loop
+
+	; Switch banks
 	ld A, 1
 	ld [VRAMWriteBank], A
 	ld [CGBVRAMBank], A
-	ld HL, BaseTileMap
+	ld SP, BaseTileMap
+	; No need to reset C here, it's now 255 and we assume over-writing can't happen.
+	; We did clobber A though, so reset it again.
+	ld A, 20
 	jr .pair_loop
-
-.row_loop
-	ld E, 20
-
-	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
-	LongSub HL, 322, HL
-	; Check if our new position is past the end of the BaseTileMap (>= AltTileMap).
-	; If so, switch to second bank before starting the next loop.
-	ld A, H
-	cp HIGH(AltTileMap)
-	jr nc, .switch_bank
-
-.pair_loop
-	ld A, [DE]
-	inc E ; we explicitly want to wrap on overflow here
-	ld [HL+], A
-	ld A, [DE]
-	inc E ; and again
-	ld [HL+], A
-
-	; HL += 14
+	
+.done
+	; Save state. We're done writing so we can relax timing restrictions.
+	ld [VRAMWriteX], A
+	ld A, C
+	ld [VRAMWriteY], A
+	ld A, L
+	ld [VRAMBufferHead], A
+	ld [VRAMBufferAddr], SP
+	ld A, [FlushVRAMBufferSP]
+	ld L, A
+	ld A [FlushVRAMBufferSP+1]
+	ld H, A
+	ld SP, HL
+	ret

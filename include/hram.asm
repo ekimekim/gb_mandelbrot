@@ -3,8 +3,8 @@ _G_HRAM EQU "true"
 
 RSSET $ff80
 
-; Index of CallStackScrolls to set next row to. The index is then decremented, so we draw
-; from top of stack down. Reset to top of stack during vblank.
-CallStackScrollsIndex rb 1
+; Temporarily hold stack pointer during FlushVRAMBuffer.
+; This is loaded to using ld [nn], SP. TODO what endianness?
+FlushVRAMBufferSP rb 2
 
 ENDC
