@@ -43,6 +43,19 @@ Start::
 	jp .main
 
 
+VBlank::
+	push AF
+	push BC
+	push DE
+	push HL
+	call FlushVRAMBuffer
+	pop HL
+	pop DE
+	pop BC
+	pop AF
+	reti
+
+
 ; Assumes screen is off.
 InitGraphics:
 	; Construct a direct pixel map to screen by mapping tiles 0 to 179 to the first 9 rows,
