@@ -237,15 +237,15 @@ PopulateMap:
 ; Assumes a time limit of 2000 cycles remaining during VBlank,
 ; and flushes as much of the buffer as it can within that time.
 ; Timing analysis:
-;   Preamble: 52 cycles
-;   Per pair: 21 cycles
+;   Preamble: 56 cycles
+;   Per two pairs: 38 cycles (avg 19 per pair)
 ;   Extra per row: 17 cycles
-;   Per complete row: 20x(per pair) + extra per row = 437 cycles
+;   Per complete row: 10x(per two pairs) + extra per row = 397 cycles
 ;   If bank is crossed: 17 cycles
 ;   Averaging out the per row effects and assuming we do hit a bank cross:
-;     Total: preamble + bank cross + pairs * (complete row) / 20 = 69 + 21.85 * pairs
+;     Total: preamble + bank cross + pairs * (complete row) / 20 = 73 + 19.85 * pairs
 ;   In CGB double speed mode, VBlank is about 2280 cycles. Assume we get ~2000 of that.
-;   Then our cap is 88 pairs = 1991 cycles.
+;   Then a rough cap is 98 pairs ~= 2018 cycles.
 FlushVRAMBuffer:
 	; Determine buffer length. Also stash VRAMBufferHead in D.
 	ld A, [VRAMBufferHead]
@@ -258,9 +258,9 @@ FlushVRAMBuffer:
 	; Since it's even, rotation puts 0 in the top bit and saves a cycle over srl A.
 	; Enforce a max value due to time constraints.
 	rrca
-	cp 88
+	cp 98
 	jr nc, .no_cap
-	ld A, 88
+	ld A, 98
 .no_cap
 	ld B, A ; B = number of pairs to read.
 
@@ -288,16 +288,30 @@ FlushVRAMBuffer:
 	ld H, HIGH(VRAMBuffer)
 	ld L, D
 
+	xor A ; clear carry flag
 	ld A, E ; A = X counter
-	jr .start
+	rra ; A = X counter / 2, set carry if counter was odd
+	jr c, .odd_start
+	jr .even_start
 
-.pair_loop
+.two_pair_loop
 	; Check if buffer is fully written. We do this right before writing the next one
 	; so all internal state is ready for the next write.
 	dec B
-	jr z, .done
+	jr z, .even_done
 
-.start
+.even_start
+	ld E, [HL]
+	inc L
+	ld D, [HL]
+	inc L ; explicitly wrap on overflow without carrying
+	push DE ; write 2 bytes
+	add SP, 14 ; skip the next 14 bytes
+
+	dec B
+	jr z, .odd_done
+
+.odd_start
 	ld E, [HL]
 	inc L
 	ld D, [HL]
@@ -307,10 +321,10 @@ FlushVRAMBuffer:
 
 	; check if row is finished
 	dec A
-	jr nz, .pair_loop
+	jr nz, .two_pair_loop
 
-	; reset X counter
-	ld A, 20
+	; reset halved X counter
+	ld A, 10
 
 	; Adjust write addr to go back one row, plus 2. 16 * 20 + 2 = 322.
 	; add SP, n adds a signed 8-bit value, so to subtract 322 we do SP-127-127-68.
@@ -320,7 +334,7 @@ FlushVRAMBuffer:
 	add SP, -68
 	; Decrement row counter, if zero then switch banks.
 	dec C
-	jr nz, .pair_loop
+	jr nz, .two_pair_loop
 
 	; Switch banks
 	ld A, 1
@@ -329,11 +343,19 @@ FlushVRAMBuffer:
 	ld SP, BaseTileMap
 	; No need to reset C here, it's now 255 and we assume over-writing can't happen.
 	; We did clobber A though, so reset it again.
-	ld A, 20
-	jr .pair_loop
-	
-.done
+	ld A, 10
+	jr .two_pair_loop
+
 	; Save state. We're done writing so we can relax timing restrictions.
+	; Need to slightly adjust the final X counter depending on if we ended on an odd or even iteration.
+.odd_done
+	; Need to add 1 to X counter when restoring it
+	or B ; we know B = 0, so A |= B is a no-op but clears carry
+	jr .done
+.even_done
+	scf ; set carry
+.done
+	rla ; X = 2 * X + carry
 	ld [VRAMWriteX], A
 	ld A, C
 	ld [VRAMWriteY], A
